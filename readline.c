@@ -7,29 +7,50 @@
 #include <string.h>
 #include <unistd.h>
 
+//STRNCMP
+
+int find_env(char **envp, char *pattern)
+{
+  int len;
+  for (int i = 0; envp[i] != NULL; i++)
+  {
+    len = strlen(pattern);
+    
+    if (strncmp(envp[i], pattern, len) == 0)
+    {
+      return i;
+    }
+  }
+  return -1;
+}
+
+
 /*
  * Read a line from standard input into a newly allocated 
  * array of char. The allocation is via malloc(size_t), the array 
  * must be freed via free(void*).
  */
 
-char *readline(void) {
-  #define BUFFER_LENGTH 256
+char *readline(void)
+{
+#define BUFFER_LENGTH 256
   static char buffer[BUFFER_LENGTH];
   int offset = 0;
-  for (;;) {
+  for (;;)
+  {
     char c = fgetc(stdin);
-    if (c==EOF) {
+    if (c == EOF)
+    {
       printf("PANIC: EOF on stdin\n");
       exit(-1);
     }
-    if (c=='\n')
+    if (c == '\n')
       break;
     buffer[offset++] = c;
   }
   buffer[offset++] = '\0';
   char *line = malloc(offset);
-  strcpy(line,buffer);
+  strcpy(line, buffer);
   return line;
 }
 
@@ -38,54 +59,62 @@ char *readline(void) {
  * Returns a null-terminated array of words.
  * The array has been allocated by malloc, it must be freed by free.
  */
-char **split_in_words(char *line) {
-  #define MAX_NWORDS 256
-  static char* words[MAX_NWORDS];
-  int nwords=0;
-	char *cur = line;
-	char c;
-  words[0]=NULL;
-	while ((c = *cur) != 0) {
-		char *word = NULL;
-		char *start;
-		switch (c) {
-		case ' ':
-		case '\t':
-			/* Ignore any whitespace */
-			cur++;
-			break;
-		case '<':
-			word = "<";
-			cur++;
-			break;
-		case '>':
-			word = ">";
-			cur++;
-			break;
-		case '|':
-			word = "|";
-			cur++;
-			break;
-		case ';':
-			word = ";";
-			cur++;
-			break;
-		case '&':
-			word = "&";
-			cur++;
-			break;
-		default:
-			/* Another word */
-			start = cur;
-      if (c=='"') {
+char **split_in_words(char *line)
+{
+#define MAX_NWORDS 256
+  static char *words[MAX_NWORDS];
+  int nwords = 0;
+  char *cur = line;
+  char c;
+  words[0] = NULL;
+  while ((c = *cur) != 0)
+  {
+    char *word = NULL;
+    char *start;
+    switch (c)
+    {
+    case ' ':
+    case '\t':
+      /* Ignore any whitespace */
+      cur++;
+      break;
+    case '<':
+      word = "<";
+      cur++;
+      break;
+    case '>':
+      word = ">";
+      cur++;
+      break;
+    case '|':
+      word = "|";
+      cur++;
+      break;
+    case ';':
+      word = ";";
+      cur++;
+      break;
+    case '&':
+      word = "&";
+      cur++;
+      break;
+    default:
+      /* Another word */
+      start = cur;
+      if (c == '"')
+      {
         c = *++cur;
-        while (c!='"')
+        while (c != '"')
           c = *++cur;
         cur++;
-      } else {
-        while (c) {
+      }
+      else
+      {
+        while (c)
+        {
           c = *++cur;
-          switch (c) {
+          switch (c)
+          {
           case 0:
           case ' ':
           case '\t':
@@ -96,47 +125,77 @@ char **split_in_words(char *line) {
           case '&':
             c = 0;
             break;
-          default: ;
+          default:;
           }
         }
       }
-			word = malloc((cur - start + 1) * sizeof(char));
-			strncpy(word, start, cur - start);
-			word[cur - start] = 0;
-		}
-		if (word) {
-			words[nwords++] = word;
-      words[nwords]=NULL;
-		}
-	}
+      word = malloc((cur - start + 1) * sizeof(char));
+      strncpy(word, start, cur - start);
+      word[cur - start] = 0;
+    }
+    if (word)
+    {
+      words[nwords++] = word;
+      words[nwords] = NULL;
+    }
+  }
   size_t size = (nwords + 1) * sizeof(char *);
-  char** tmp = malloc(size);
-  memcpy(tmp,words,size);
-	return tmp;
+  char **tmp = malloc(size);
+  memcpy(tmp, words, size);
+  return tmp;
 }
 
+int main(int argc, char **argv, char **envp)
+{
+  int pwd = find_env(envp, "PWD=");
+  int usr = find_env();
 
-
-int main(int argc, char** argv, char**envp) {
-
-  for (int i=0;envp[i]!=NULL;i++)
-    printf("env[%d]=%s\n",i,envp[i]);
+  for (int i = 0; envp[i] != NULL; i++)
+    printf("env[%d]=%s\n", i, envp[i]);
   printf("\n");
 
   // set stdout without buffering so what is printed
   // is printed immediately on the screen.
-  // setvbuf(stdout, NULL, _IONBF, 0); 
+  // setvbuf(stdout, NULL, _IONBF, 0);
   // setbuf(stdout, NULL);
-  
-  for (;;) {
+
+  for (;;)
+  {
     printf("> ");
     fflush(stdout);
-    char* line = readline();
+    char *line = readline();
     printf("%s\n", line);
-    char** words = split_in_words(line);
-    for (int i=0;words[i]!=NULL;i++)
+    char **words = split_in_words(line);
+    for (int i = 0; words[i] != NULL; i++)
       printf("[%s], ", words[i]);
     printf("\n");
+
+  //   int pid = fork();
+  //   int status;
+  //   switch (pid)
+  //   {
+  //   case -1: /* error */
+  //     perror("fork: ");
+  //     exit(-1);
+  //   case 0:
+  //   { /* child code */
+  //     char *command = words[0];
+  //     if (strcmp(command, "cd"))
+  //       cd(words);
+  //     else if (strcmp(command, "pwd"))
+  //       pwd(words);
+  //     else
+  //     {
+  //       execve("/bin/gedit", words, envp);
+  //     }
+  //     break;
+  //   }
+  //   default: /* parent code */
+  //     if (-1 == waitpid(pid, &status, 0))
+  //       perror("waitpid: ");
+  //     break;
+  //   }
+  //   exit(0);
     free(words);
     free(line);
   }
