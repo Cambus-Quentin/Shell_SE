@@ -42,42 +42,17 @@ int pwd(char **envp, char **args)
   }
   else
   {
-    /* find env à enlever */
-    if (envp[find_env(envp, "PWD")] == NULL)
-      printf("PTN DE MERDE \n");
-
-    // char *printed_path = envp[find_env(envp, "PWD")];
-    // printed_path = &printed_path[4];
-    // printf("%s\n", printed_path);
+    char *test;
+    char *printed_path = envp[find_env(envp, "PWD")];
+    printed_path = printed_path + 4;
+    getcwd(test, BUFFER_LENGTH);
+    if (strcmp (printed_path, test) == 0)
+      printf("%s\n", printed_path);
+    else 
+      printf("Erreur de synchronisation entre variable d'environnement et current working directory\n");
   }
   return 0;
 }
-
-// char *absolute_path(char *path, char **envp, int indice_pwd)
-// {
-//   char *final_path = (char *)malloc(255);
-//   char *dir = strtok(path, "/");
-//   char *dir_current, *dir_cur_before;
-//   if (dir == NULL)
-//   {
-//     final_path = envp[indice_pwd] + 4;
-//     dir = strtok(NULL, "l");
-//   }
-//   /* walk through other tokens */
-//   while (dir != NULL)
-//   {
-//     if (dir = "..")
-//     {
-//       dir_current = strtok(final_path,"/");
-//       dir_current = strtok(NULL,"/");
-//       while (dir_current == NULL ){
-//         dir_cur_before = dir_current;
-//       }
-//     }
-//     strcat(final_path, dir);
-//     dir = strtok(NULL, "/");
-//   }
-// }
 
 char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
 {
@@ -208,13 +183,13 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
 int cd(char **envp, char **args, int indice_pwd, int indice_home)
 {
 
-  char *res = (char *)malloc(1);
+  char *res = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
   char *pwd = "PWD=";
   strcat(res, pwd);
   if (args[1] == NULL)
   {
     char *home = envp[indice_home] + 5;
-    strcat(res,home);
+    strcat(res, home);
     envp[indice_pwd] = res;
     chdir(home);
   }
@@ -302,6 +277,10 @@ char **split_in_words(char *line)
       word = ">";
       cur++;
       break;
+    case '\\':
+      word = ">";
+      cur++;
+      break;
     case '|':
       word = "|";
       cur++;
@@ -357,7 +336,7 @@ char **split_in_words(char *line)
     }
   }
   size_t size = (nwords + 1) * sizeof(char *);
-  char **tmp = malloc(size);
+  char **tmp = (char **)malloc(size);
   memcpy(tmp, words, size);
   return tmp;
 }
@@ -378,7 +357,14 @@ int main(int argc, char **argv, char **envp)
     //   printf("%s\n", words[i]);
 
     char *command = words[0];
-    char *slash = (char *)malloc(1);
+    if (command == NULL)
+    {
+      free(words);
+      free(line);
+      continue;
+    }
+
+    char *slash = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
     slash[0] = '/';
 
     if (strcmp(command, "pwd") == 0)
@@ -400,7 +386,7 @@ int main(int argc, char **argv, char **envp)
       switch (pid)
       {
       case -1: /* error */
-        perror("FORK : NO_CHIL_CREATED");
+        perror("FORK : NO_CHILD_CREATED");
         exit(-1);
       case 0:
       { /* child code */
@@ -409,17 +395,17 @@ int main(int argc, char **argv, char **envp)
         strcpy(path, envp[path_loc]);
 
         char *path_part = strtok(path, ":");
-        char *final_command = (char *)malloc(1);
+        char *final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
         int error = -1;
         while (path_part != NULL)
         {
           strcat(final_command, path_part);
           strcat(final_command, slash);
-          if (error = open(final_command, O_RDONLY) != -1)
+          if ((error = open(final_command, O_RDONLY)) != -1)
             break;
           path_part = strtok(NULL, ":");
           free(final_command);
-          final_command = (char *)malloc(1);
+          final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
         }
         if (error != -1)
         {
@@ -430,7 +416,7 @@ int main(int argc, char **argv, char **envp)
           // TODO : CHANGER LES ERREURS
           printf("ERREUR \n");
         }
-
+        free(final_command);
         break;
       }
       default: /* parent code */
@@ -439,7 +425,6 @@ int main(int argc, char **argv, char **envp)
         break;
       }
     }
-
     free(words);
     free(line);
   }
