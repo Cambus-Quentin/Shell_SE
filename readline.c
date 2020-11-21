@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
 #define BOLDBLACK "\033[1m\033[30m"
 #define RESET "\033[0m"
 #define BUFFER_LENGTH 256
@@ -32,7 +33,7 @@ int find_env(char **envp, char *pattern)
 
 int pwd(char **envp, char **args)
 {
-  if (args[0] != NULL && strcmp(args[0], "--help") == 0)
+  if (args[1] != NULL && (strcmp(args[1], "--help") == 0))
   {
     printf(" pwd - output the current working directory \n      pwd \n ");
     printf(BOLDBLACK "DESCRIPTION \n pwd " RESET);
@@ -42,9 +43,12 @@ int pwd(char **envp, char **args)
   else
   {
     /* find env à enlever */
-    char *printed_path = envp[find_env(envp, "PWD")];
-    printed_path = &printed_path[4];
-    printf("%s\n", printed_path);
+    if (envp[find_env(envp, "PWD")] == NULL)
+      printf("PTN DE MERDE \n");
+
+    // char *printed_path = envp[find_env(envp, "PWD")];
+    // printed_path = &printed_path[4];
+    // printf("%s\n", printed_path);
   }
   return 0;
 }
@@ -82,7 +86,7 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
   char *cur = path;
   char c;
   dirs[0] = NULL;
-  int dec = 0;
+  int dec = -1;
 
   if (path[0] == '~')
   {
@@ -94,9 +98,9 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
     dec = pwd_loc;
   }
 
-  if (dec != 0)
+  if (dec != -1)
   {
-    char *begin;
+    char *begin = (char *)malloc(MAX_NWORDS);
     strcpy(begin, envp[dec]);
 
     char *seg = strtok(begin, "/");
@@ -125,6 +129,20 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
       /* Ignore any whitespace */
       cur++;
       break;
+    case '.':
+      c = *++cur;
+      if (c == '.')
+      {
+        //dirs[ndirs] = NULL;
+        ndirs--;
+        if (ndirs < 0)
+        {
+          printf("Erreur mauvais chemin");
+          return NULL;
+          ;
+        }
+      }
+      break;
     default:
       /* Another word */
       start = cur;
@@ -135,6 +153,13 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
           c = *++cur;
         cur++;
       }
+      else if (c == '\'')
+      {
+        c = *++cur;
+        while (c != '\'')
+          c = *++cur;
+        cur++;
+      }
       else
       {
         while (c)
@@ -142,7 +167,9 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
           c = *++cur;
           switch (c)
           {
-          case 0:
+          case '/':
+            c = 0;
+            break;
           case ' ':
           case '\t':
           case '<':
@@ -150,8 +177,8 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
           case '|':
           case ';':
           case '&':
-            c = 0;
-            break;
+            printf("Chemin incorrect\n");
+            return NULL;
           default:;
           }
         }
@@ -167,27 +194,51 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
     }
   }
   size_t size = (ndirs + 1) * sizeof(char *);
-  char **tmp = malloc(size);
-  memcpy(tmp, dirs, size);
+  char *tmp = (char *)malloc(size);
+
+  for (int i = 0; i < ndirs; i++)
+  {
+    strcat(tmp, "/");
+    strcat(tmp, dirs[i]);
+  }
+  printf("%s", tmp);
   return tmp;
 }
 
 int cd(char **envp, char **args, int indice_pwd, int indice_home)
 {
-  if (args[0] == NULL)
+
+  char *res = (char *)malloc(1);
+  char *pwd = "PWD=";
+  strcat(res, pwd);
+  if (args[1] == NULL)
   {
     char *home = envp[indice_home] + 5;
-    envp[indice_pwd] = home;
+    strcat(res,home);
+    envp[indice_pwd] = res;
+    chdir(home);
   }
-  else if (strcmp(args[0], "--help") == 0)
+  else if (strcmp(args[1], "--help") == 0)
   {
     /* TO_DO : Ajoutez manuel du cd*/
-    printf("Man cd");
+    printf("Man cd\n");
   }
   else
   {
+    char *path = path_parsing(args[1], envp, indice_pwd, indice_home);
+    printf("PWD : %s\n", envp[indice_pwd]);
+    int error = open(path, O_RDONLY | O_DIRECTORY);
 
-    //error = open(final_command, O_RDONLY | O_DIRECTORY);
+    if (error != -1)
+    {
+      chdir(path);
+      envp[indice_pwd] = strcat(res, path);
+    }
+    else
+    {
+      printf("Path : %s incorrecte\n", path);
+      return -1;
+    }
   }
   return 0;
 }
@@ -273,6 +324,7 @@ char **split_in_words(char *line)
           c = *++cur;
         cur++;
       }
+
       else
       {
         while (c)
@@ -322,8 +374,8 @@ int main(int argc, char **argv, char **envp)
     fflush(stdout);
     char *line = readline();
     char **words = split_in_words(line);
-    for (int i = 0; words[i] != NULL; i++)
-      printf("%s\n", words[i]);
+    // for (int i = 0; words[i] != NULL; i++)
+    //   printf("%s\n", words[i]);
 
     char *command = words[0];
     char *slash = (char *)malloc(1);
