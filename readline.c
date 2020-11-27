@@ -11,11 +11,17 @@
 
 #define BOLDBLACK "\033[1m\033[30m"
 #define RESET "\033[0m"
-#define BUFFER_LENGTH 256
+#define BUFFER_LENGTH 2048
 #define MAX_NWORDS 256
 
-//STRNCMP
+typedef struct c
+{
+  int entree;
+  int sortie;
+  char **args;
+} command, *pcommand;
 
+/* Permet de trouver l'indice dans le tableau de variable d'environnement de la variable commancant par le pattern souhaiter */
 int find_env(char **envp, char *pattern)
 {
   int len;
@@ -31,6 +37,7 @@ int find_env(char **envp, char *pattern)
   return -1;
 }
 
+/* Commande interne permettant d'afficher le répertoire courant */
 int pwd(char **envp, char **args)
 {
   if (args[1] != NULL && (strcmp(args[1], "--help") == 0))
@@ -46,14 +53,15 @@ int pwd(char **envp, char **args)
     char *printed_path = envp[find_env(envp, "PWD")];
     printed_path = printed_path + 4;
     getcwd(test, BUFFER_LENGTH);
-    if (strcmp (printed_path, test) == 0)
+    if (strcmp(printed_path, test) == 0)
       printf("%s\n", printed_path);
-    else 
+    else
       printf("Erreur de synchronisation entre variable d'environnement et current working directory\n");
   }
   return 0;
 }
 
+/* Fonction de parsing des chemins absolue et relatif pour cd */
 char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
 {
   char *dirs[MAX_NWORDS];
@@ -108,7 +116,7 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
       c = *++cur;
       if (c == '.')
       {
-        //dirs[ndirs] = NULL;
+        dirs[ndirs] = NULL;
         ndirs--;
         if (ndirs < 0)
         {
@@ -180,9 +188,9 @@ char *path_parsing(char *path, char **envp, int pwd_loc, int home_loc)
   return tmp;
 }
 
+/* Commande interne permettant de se déplacer dans le système de fichiers tout en prenant en compte les erreurs */
 int cd(char **envp, char **args, int indice_pwd, int indice_home)
 {
-
   char *res = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
   char *pwd = "PWD=";
   strcat(res, pwd);
@@ -196,7 +204,7 @@ int cd(char **envp, char **args, int indice_pwd, int indice_home)
   else if (strcmp(args[1], "--help") == 0)
   {
     /* TO_DO : Ajoutez manuel du cd*/
-    printf("Man cd\n");
+    printf("man cd\n");
   }
   else
   {
@@ -353,76 +361,104 @@ int main(int argc, char **argv, char **envp)
     fflush(stdout);
     char *line = readline();
     char **words = split_in_words(line);
-    // for (int i = 0; words[i] != NULL; i++)
-    //   printf("%s\n", words[i]);
+    int debut = 0;
+    int j = 0;
+    int i = 0;
+    pcommand *tabCommand = (pcommand *)malloc(sizeof(pcommand));
 
-    char *command = words[0];
-    if (command == NULL)
+    for (; words[i] != NULL; i++)
     {
-      free(words);
-      free(line);
-      continue;
-    }
-
-    char *slash = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
-    slash[0] = '/';
-
-    if (strcmp(command, "pwd") == 0)
-    {
-      pwd(envp, words);
-    }
-    else if (strcmp(command, "cd") == 0)
-    {
-      cd(envp, words, pwd_loc, home_loc);
-    }
-    else if (strcmp(command, "exit") == 0)
-    {
-      exit(0);
-    }
-    else
-    {
-      int pid = fork();
-      int status;
-      switch (pid)
+      if (strcmp(words[i], "|") == 0)
       {
-      case -1: /* error */
-        perror("FORK : NO_CHILD_CREATED");
-        exit(-1);
-      case 0:
-      { /* child code */
-        strcat(slash, command);
-        char *path = (char *)malloc(strlen(envp[path_loc]));
-        strcpy(path, envp[path_loc]);
-
-        char *path_part = strtok(path, ":");
-        char *final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
-        int error = -1;
-        while (path_part != NULL)
+        if (tabCommand[j] == NULL)
         {
-          strcat(final_command, path_part);
-          strcat(final_command, slash);
-          if ((error = open(final_command, O_RDONLY)) != -1)
-            break;
-          path_part = strtok(NULL, ":");
-          free(final_command);
-          final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
+          tabCommand = realloc(tabCommand, (j + 1) * sizeof(pcommand) * 2);
+          tabCommand[j] = (pcommand)malloc(sizeof(command));
         }
-        if (error != -1)
-        {
-          execve(final_command, words, envp);
-        }
-        else
-        {
-          // TODO : CHANGER LES ERREURS
-          printf("ERREUR \n");
-        }
-        free(final_command);
-        break;
+        tabCommand[j]->args = &words[debut];
+        tabCommand[j++]->args[i - debut] = NULL;
+        debut = i + 1;
       }
-      default: /* parent code */
-        if (-1 == waitpid(pid, &status, 0))
-          perror("waitpid: ");
-        break;
+    }
+    tabCommand[j] = (pcommand)malloc(sizeof(command));
+    tabCommand[j]->args = &words[debut];
+    tabCommand[j]->args[i - debut] = NULL;
+
+    int fp[2];
+    for (int z = 0; tabCommand[z] != NULL; z++)
+    {
+      char *command = tabCommand[z]->args[0];
+
+      char *slash = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
+      slash[0] = '/';
+
+      /* Déterminer si l'entrée correspond à une commande interne */
+      /* ici pwd */
+      if (strcmp(command, "pwd") == 0)
+      {
+        pwd(envp, tabCommand[z]->args);
+      }
+      /* ici cd */
+      else if (strcmp(command, "cd") == 0)
+      {
+        cd(envp, tabCommand[z]->args, pwd_loc, home_loc);
+      }
+      /* ici exit */
+      else if (strcmp(command, "exit") == 0)
+      {
+        exit(0);
+      }
+      else /* Utilisation des fonctions externes */
+      {
+        if (j >= 1)
+          pipe(fp);
+        int pid = fork();
+        int status;
+        switch (pid)
+        {
+        case -1: /* error */
+          perror("FORK : NO_CHILD_CREATED");
+          exit(-1);
+        case 0:
+        { /* child code */
+          strcat(slash, command);
+          char *path = (char *)malloc(strlen(envp[path_loc]) - 5);
+          strcpy(path, envp[path_loc] + 5);
+
+          char *path_part = strtok(path, ":");
+          char *final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
+          int error = -1;
+          while (path_part != NULL)
+          {
+            strcat(final_command, path_part);
+            strcat(final_command, slash);
+            if ((error = open(final_command, O_RDONLY)) != -1)
+              break;
+            path_part = strtok(NULL, ":");
+            final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
+          }
+          if (error != -1)
+          {
+            execve(final_command, tabCommand[z]->args, envp);
+          }
+          else
+          {
+            printf("La commande executée est erronée. %s\n", final_command);
+          }
+
+          free(final_command);
+          break;
+        }
+        default: /* parent code */
+          if (j >= 1)
+          {
+            close(fp[0]);
+            close(fp[1]);
+          }
+          if (-1 == waitpid(pid, &status, 0))
+            perror("waitpid: ");
+          break;
+        }
       }
     }
     free(words);
