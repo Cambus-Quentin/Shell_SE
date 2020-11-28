@@ -9,7 +9,7 @@ intern_cmd.o: intern_cmd.c
 shell: readline.o intern_cmd.o
 	gcc -g -o shell readline.o intern_cmd.o
 
-.PHONY: clear
+.PHONY: clean
 
-clear:
+clean:
 	rm -f *.o shell

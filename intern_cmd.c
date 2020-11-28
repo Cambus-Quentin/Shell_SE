@@ -171,7 +171,6 @@ int cd(char **envp, char **args, int indice_pwd, int indice_home)
   else
   {
     char *path = path_parsing(args[1], envp, indice_pwd, indice_home);
-    printf("PWD : %s\n", envp[indice_pwd]);
     int error = open(path, O_RDONLY | O_DIRECTORY);
 
     if (error != -1)
