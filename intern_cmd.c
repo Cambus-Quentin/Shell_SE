@@ -16,9 +16,9 @@ int pwd(char **envp, char **args)
     char *printed_path = envp[find_env(envp, "PWD")];
     printed_path = printed_path + 4;
     getcwd(test, BUFFER_LENGTH);
-    if (strcmp (printed_path, test) == 0)
+    if (strcmp(printed_path, test) == 0)
       printf("%s\n", printed_path);
-    else 
+    else
       printf("Erreur de synchronisation entre variable d'environnement et current working directory\n");
   }
   return 0;
@@ -183,6 +183,27 @@ int cd(char **envp, char **args, int indice_pwd, int indice_home)
       printf("Path : %s incorrecte\n", path);
       return -1;
     }
+  }
+  return 0;
+}
+
+int exec_intern_cmd(char **cmd_name, char **envp)
+{
+  if (strcmp(cmd_name[0], "pwd") == 0)
+  {
+    pwd(envp, cmd_name);
+  }
+  else if (strcmp(cmd_name[0], "cd") == 0)
+  {
+    cd(envp, cmd_name, find_env(envp, "PWD="), find_env(envp, "HOME="));
+  }
+  /* ici exit */
+  else if (strcmp(cmd_name[0], "exit") == 0)
+  {
+    exit(0);
+  }
+  else{
+    return -1;
   }
   return 0;
 }

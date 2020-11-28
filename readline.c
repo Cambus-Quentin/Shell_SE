@@ -1,12 +1,8 @@
 #include "readline.h"
 #include "intern_cmd.h"
-
-typedef struct c
-{
-  int entree;
-  int sortie;
-  char **args;
-} command, *pcommand;
+#include "pipe.h"
+#include "shell.h"
+#include "extern_cmd.h"
 
 //STRNCMP
 
@@ -152,16 +148,15 @@ int main(int argc, char **argv, char **envp)
 {
   int pwd_loc = find_env(envp, "PWD=");
   int path_loc = find_env(envp, "PATH=");
-  int home_loc = find_env(envp, "HOME=");
   for (;;)
   {
-    printf("%s", envp[pwd_loc] + 4);
-    printf("> ");
+    print_prompt(envp[pwd_loc] + 4);
     fflush(stdout);
     char *line = readline();
     char **words = split_in_words(line);
+
     int debut = 0;
-    int j = 0;
+    int nb_pipe = 0;
     int i = 0;
     pcommand *tabCommand = (pcommand *)malloc(sizeof(pcommand));
 
@@ -173,49 +168,39 @@ int main(int argc, char **argv, char **envp)
     {
       if (strcmp(words[i], "|") == 0)
       {
-        if (tabCommand[j] == NULL)
+        if (tabCommand[nb_pipe] == NULL)
         {
-          tabCommand = realloc(tabCommand, (j + 1) * sizeof(pcommand) * 2);
-          tabCommand[j] = (pcommand)malloc(sizeof(command));
+          tabCommand = realloc(tabCommand, (nb_pipe + 1) * sizeof(pcommand) * 2);
+          tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
         }
-        tabCommand[j]->args = &words[debut];
-        // tabCommand[j]->sortie = fp[1];
-        // tabCommand[j]->entree = -1;
-        tabCommand[j++]->args[i - debut] = NULL;
+        tabCommand[nb_pipe]->args = &words[debut];
+        // tabCommand[nb_pipe]->sortie = fp[1];
+        // tabCommand[nb_pipe]->entree = -1;
+        tabCommand[nb_pipe++]->args[i - debut] = NULL;
         debut = i + 1;
       }
     }
-    tabCommand[j] = (pcommand)malloc(sizeof(command));
-    tabCommand[j]->args = &words[debut];
-    tabCommand[j]->args[i - debut] = NULL;
-    // tabCommand[j]->entree = fp[0];
-    // tabCommand[j]->sortie = -1;
+    tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
+    tabCommand[nb_pipe]->args = &words[debut];
+    tabCommand[nb_pipe]->args[i - debut] = NULL;
+    // tabCommand[nb_pipe]->entree = fp[0];
+    // tabCommand[nb_pipe]->sortie = -1;
 
-    int fps[j][2];
-    for (int z = 0; tabCommand[z] != NULL; z++)
+    int fps[nb_pipe * 2];
+
+    for (int v = 0; v < nb_pipe; v++)
     {
-      char *command = tabCommand[z]->args[0];
+      if (pipe(fps + v * 2) < 0)
+      {
+        printf("Error pipe\n");
+        exit(1);
+      }
+    }
 
-      char *slash = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
-      slash[0] = '/';
-
+    for (int cmd_indice = 0; tabCommand[cmd_indice] != NULL; cmd_indice++)
+    {
       /* Déterminer si l'entrée correspond à une commande interne */
-      /* ici pwd */
-      if (strcmp(command, "pwd") == 0)
-      {
-        pwd(envp, tabCommand[z]->args);
-      }
-      /* ici cd */
-      else if (strcmp(command, "cd") == 0)
-      {
-        cd(envp, tabCommand[z]->args, pwd_loc, home_loc);
-      }
-      /* ici exit */
-      else if (strcmp(command, "exit") == 0)
-      {
-        exit(0);
-      }
-      else /* Utilisation des fonctions externes */
+      if (exec_intern_cmd(tabCommand[cmd_indice]->args, envp) == -1) /* Utilisation des fonctions externes */
       {
 
         int pid = fork();
@@ -233,60 +218,50 @@ int main(int argc, char **argv, char **envp)
           /* pere : fermer tous descripteurs */
 
           /* PREMIERE COMMANDE TOUJOURS PIPER MAIS SI 2E EST INTERNE ON S'EN FOUT */
-          
+
           /* si pas premier pipe */
-          if (z != 0)
-            dup2(fps[z][0], STDIN_FILENO);
+          if (cmd_indice != 0)
+          {
+            if (dup2(fps[0], STDIN_FILENO) == -1)
+            {
+              printf("Error 2nd termes dup2\n");
+              perror("dup2");
+              exit(1);
+            }
+            printf("Pas debut \n ");
+          }
 
           /* si pas le dernier */
-          if (tabCommand[z + 1] != NULL)
-            dup2(fps[z][1], STDOUT_FILENO);
-
-          for (int k = 0; k < j; k++)
+          if (tabCommand[cmd_indice + 1] != NULL)
           {
-            if (k != z)
+            if (dup2(fps[cmd_indice*2 + 1], STDOUT_FILENO) == -1)
             {
-              close(fps[k][0]);
-              close(fps[k][1]);
+              printf("Pas BON du tout\n ");
+              perror("dup2");
+              exit(1);
             }
+            printf("Pas fin \n ");
           }
 
-          strcat(slash, command);
-          char *path = (char *)malloc(strlen(envp[path_loc]) - 5);
-          strcpy(path, envp[path_loc] + 5);
-
-          char *path_part = strtok(path, ":");
-          char *final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
-          int error = -1;
-          while (path_part != NULL)
+          for (int k = 0; k < nb_pipe * 2; k++)
           {
-            strcat(final_command, path_part);
-            strcat(final_command, slash);
-            if ((error = open(final_command, O_RDONLY)) != -1)
-              break;
-            path_part = strtok(NULL, ":");
-            final_command = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
-          }
-          if (error != -1)
-          {
-            execve(final_command, tabCommand[z]->args, envp);
-          }
-          else
-          {
-            printf("La commande executée est erronée. %s\n", final_command);
+            if (close(fps[k*2] == -1))
+            perror("close");
           }
 
-          free(final_command);
-          break;
+          exec_extern_cmd(tabCommand[cmd_indice]->args, envp, path_loc); 
         }
         default: /* parent code */
-          for (int m = 0; m < j; m++) {
-            close(fps[m][0]);
-            close(fps[m][1]);
+          for (int m = 0; m < nb_pipe; m++)
+          {
+            close(fps[m * 2]);
+            close(fps[m * 2 + 1]);
           }
-          
-          if (-1 == waitpid(pid, &status, 0))
+
+          if (-1 == waitpid(-1, &status, WNOHANG))
             perror("waitpid: ");
+          // for (int stop = 0; stop < nb_pipe + 1; stop++)
+          //   wait(&status);
           break;
         }
       }
