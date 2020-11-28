@@ -1,4 +1,5 @@
 #include "readline.h"
+#include "intern_cmd.h"
 
 //STRNCMP
 
