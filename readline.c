@@ -153,7 +153,6 @@ int main(int argc, char **argv, char **envp)
   int pwd_loc = find_env(envp, "PWD=");
   int path_loc = find_env(envp, "PATH=");
   int home_loc = find_env(envp, "HOME=");
-  int fp[2];
   for (;;)
   {
     printf("%s", envp[pwd_loc] + 4);
@@ -166,6 +165,7 @@ int main(int argc, char **argv, char **envp)
     int i = 0;
     pcommand *tabCommand = (pcommand *)malloc(sizeof(pcommand));
 
+    /* sigsev avec  ENTER */
     if (words == NULL)
       continue;
 
@@ -179,8 +179,8 @@ int main(int argc, char **argv, char **envp)
           tabCommand[j] = (pcommand)malloc(sizeof(command));
         }
         tabCommand[j]->args = &words[debut];
-        tabCommand[j]->sortie = fp[1];
-        tabCommand[j]->entree = -1;
+        // tabCommand[j]->sortie = fp[1];
+        // tabCommand[j]->entree = -1;
         tabCommand[j++]->args[i - debut] = NULL;
         debut = i + 1;
       }
@@ -188,10 +188,10 @@ int main(int argc, char **argv, char **envp)
     tabCommand[j] = (pcommand)malloc(sizeof(command));
     tabCommand[j]->args = &words[debut];
     tabCommand[j]->args[i - debut] = NULL;
-    tabCommand[j]->entree = fp[0];
-    tabCommand[j]->sortie = -1;
+    // tabCommand[j]->entree = fp[0];
+    // tabCommand[j]->sortie = -1;
 
-    pipe(fp);
+    int fps[j][2];
     for (int z = 0; tabCommand[z] != NULL; z++)
     {
       char *command = tabCommand[z]->args[0];
@@ -231,17 +231,24 @@ int main(int argc, char **argv, char **envp)
           /* fils : close tout les descripteurs qui ne lui appartiennent pas */
           /* pere : attendre que tout tes fils ont fini (gerer pid dans command) */
           /* pere : fermer tous descripteurs */
-          
-          if (tabCommand[z]->entree != -1)
-          {
-            dup2(fp[0], STDIN_FILENO);
-            close(fp[0]);
-          }
 
-          if (tabCommand[z]->sortie != -1)
+          /* PREMIERE COMMANDE TOUJOURS PIPER MAIS SI 2E EST INTERNE ON S'EN FOUT */
+          
+          /* si pas premier pipe */
+          if (z != 0)
+            dup2(fps[z][0], STDIN_FILENO);
+
+          /* si pas le dernier */
+          if (tabCommand[z + 1] != NULL)
+            dup2(fps[z][1], STDOUT_FILENO);
+
+          for (int k = 0; k < j; k++)
           {
-            dup2(fp[1], STDOUT_FILENO);
-            close(fp[1]);
+            if (k != z)
+            {
+              close(fps[k][0]);
+              close(fps[k][1]);
+            }
           }
 
           strcat(slash, command);
@@ -273,8 +280,11 @@ int main(int argc, char **argv, char **envp)
           break;
         }
         default: /* parent code */
-          close(fp[0]);
-          close(fp[1]);
+          for (int m = 0; m < j; m++) {
+            close(fps[m][0]);
+            close(fps[m][1]);
+          }
+          
           if (-1 == waitpid(pid, &status, 0))
             perror("waitpid: ");
           break;
