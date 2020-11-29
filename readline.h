@@ -19,9 +19,8 @@
 #define MAX_NWORDS 256
 
 
+
 int find_env(char **envp, char *pattern);
-
-
 
 char *readline(void);
 
