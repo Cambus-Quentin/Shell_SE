@@ -18,8 +18,12 @@
 #define BUFFER_LENGTH 256
 #define MAX_NWORDS 256
 
+typedef struct c
+{
+  char **cmds;
+} command, *pcommand;
 
-
+/* fonction retrounant l'index dans le tableau d'environnement du pattern demandé */
 int find_env(char **envp, char *pattern);
 
 char *readline(void);

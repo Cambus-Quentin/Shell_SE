@@ -1,10 +1,8 @@
 #include "readline.h"
 #include "intern_cmd.h"
-#include "pipe.h"
 #include "shell.h"
 #include "extern_cmd.h"
 
-//STRNCMP
 
 int find_env(char **envp, char *pattern)
 {
@@ -146,9 +144,140 @@ char **split_in_words(char *line)
 
 int main(int argc, char **argv, char **envp)
 {
+  /* récupération des indices necessaire dans le shell */
   int pwd_loc = find_env(envp, "PWD=");
   int path_loc = find_env(envp, "PATH=");
 
-  run_shell(pwd_loc, path_loc, envp);
+  for (;;)
+  {
+    /* affichage du chvron et de la localisation */
+    print_prompt(envp[pwd_loc] + 4);
+
+    fflush(stdout);
+    char *line = readline();
+    char **words = split_in_words(line);
+
+    int debut = 0;
+    int nb_pipe = 0;
+    int i = 0;
+    pcommand *tabCommand = (pcommand *)malloc(sizeof(pcommand));
+
+    /* Parsing des différentes commandes à executer selon les pipes insérer dans le shell */
+    for (; words[i] != NULL; i++)
+    {
+      if (strcmp(words[i], "|") == 0)
+      {
+        if (tabCommand[nb_pipe] == NULL)
+        {
+          tabCommand = realloc(tabCommand, (nb_pipe + 1) * sizeof(pcommand) * 2);
+          tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
+        }
+        tabCommand[nb_pipe]->cmds = &words[debut];
+        tabCommand[nb_pipe++]->cmds[i - debut] = NULL;
+        debut = i + 1;
+      }
+    }
+    tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
+    tabCommand[nb_pipe]->cmds = &words[debut];
+    tabCommand[nb_pipe]->cmds[i - debut] = NULL;
+
+    /* Création de chaque pipe dans le père*/
+    int fps[nb_pipe * 2];
+    for (int v = 0; v < nb_pipe; v++)
+    {
+      if (pipe(fps + v * 2) < 0)
+      {
+        printf("Error pipe\n");
+        exit(1);
+      }
+    }
+
+    /* Déclaration d'un tableau de pid pour attendre les fils après la boucle qui suit */
+    int tab_pid[nb_pipe];
+    int status;
+
+    /*Execution de toute les commandes*/ 
+    for (int cmd_indice = 0; cmd_indice <= nb_pipe; cmd_indice++)
+    {
+      /* Déterminer si l'entrée correspond à une commande interne  ou externe*/
+      if (tabCommand[cmd_indice] != NULL && (exec_intern_cmd(tabCommand[cmd_indice]->cmds, envp) == -1)) 
+      {
+        /* Utilisation des fonctions externes */
+        int pid = fork();
+
+        switch (pid)
+        {
+        case -1: /* error */
+          perror("FORK : NO_CHILD_CREATED");
+          exit(-1);
+        case 0:
+        {
+
+          /* Si ce n'est pas la première commande à executer, redirection de l'entrée de la commande dans la sortie du pipe correspondant */
+          if (cmd_indice != 0)
+          {
+            if (dup2(fps[(cmd_indice - 1) * 2], STDIN_FILENO) == -1)
+            {
+              printf("Error 2nd termes ou + dup2\n");
+              perror("dup2");
+              exit(1);
+            }
+          }
+
+          /* Si ce n'est pas la dernière commande, redirection de la sortie de la commande dans l'entrée du pipe*/
+          if (tabCommand[cmd_indice + 1] != NULL)
+          {
+            if (dup2(fps[(cmd_indice)*2 + 1], STDOUT_FILENO) == -1)
+            {
+              printf("Pas BON du tout\n ");
+              perror("dup2");
+              exit(1);
+            }
+          }
+
+          /* Si on a au moins un pipe, in ferme tout les descripteur de fichier de tout les pipes, ils ont été ouvert dans le père précédement
+          cette étape permet de ne pas avoir de fils qui ne peuvent pas terminer correctmeent */
+          if (nb_pipe >= 1)
+          {
+            for (int k = 0; k < nb_pipe * 2; k++)
+            {
+              if (close(fps[k]) == -1)
+              {
+                perror("close");
+                exit(1);
+              }
+            }
+          }
+
+          /* Execution dela commande externe avec les bonnes redirections si necessaire */  
+          exec_extern_cmd(tabCommand[cmd_indice]->cmds, envp, path_loc);
+
+          break;
+        }
+        default:
+
+          /* Ajout du piddans le tableau afin de les attendre plus tard*/ 
+          tab_pid[cmd_indice] = pid;
+          break;
+        }
+      }
+    }
+
+    /* Fermeture de tout les pipes et permettre au fils de se fermer également */
+    for (int i = 0; i < nb_pipe; i++)
+    {
+      close(fps[i * 2]);
+      close(fps[i * 2 + 1]);
+    }
+
+    /* Attente de tout les fils */
+    for (i = 0; i <= nb_pipe; i++)
+    {
+      waitpid(tab_pid[i], &status, 0);
+    }
+
+    free(words);
+    free(line);
+  }
   return 0;
 }

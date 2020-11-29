@@ -13,11 +13,8 @@ extern_cmd.o: extern_cmd.c
 shell.o: shell.c
 	gcc -c -g shell.c
 
-pipe.o: pipe.c
-	gcc -c -g pipe.c
-
-shell: readline.o intern_cmd.o pipe.o shell.o extern_cmd.o
-	gcc -g -o shell readline.o intern_cmd.o pipe.o shell.o extern_cmd.o
+shell: readline.o intern_cmd.o shell.o extern_cmd.o
+	gcc -g -o shell readline.o intern_cmd.o shell.o extern_cmd.o
 
 .PHONY: clean
 

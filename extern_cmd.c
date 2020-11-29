@@ -4,6 +4,7 @@
 
 void exec_extern_cmd(char **cmd, char **envp, int path_loc)
 {
+    /* Création des path correspondant à la commande et test un path correct*/
     char *slash = (char *)malloc(sizeof(char) * BUFFER_LENGTH);
     slash[0] = '/';
 
@@ -25,6 +26,7 @@ void exec_extern_cmd(char **cmd, char **envp, int path_loc)
     }
     if (error != -1)
     {
+        /* Execution de la commande */
         execve(final_command, cmd, envp);
     }
     else
