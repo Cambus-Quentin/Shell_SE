@@ -159,11 +159,6 @@ int main(int argc, char **argv, char **envp)
     int nb_pipe = 0;
     int i = 0;
     pcommand *tabCommand = (pcommand *)malloc(sizeof(pcommand));
-
-    /* sigsev avec  ENTER */
-    if (words == NULL)
-      continue;
-
     for (; words[i] != NULL; i++)
     {
       if (strcmp(words[i], "|") == 0)
@@ -174,8 +169,6 @@ int main(int argc, char **argv, char **envp)
           tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
         }
         tabCommand[nb_pipe]->args = &words[debut];
-        // tabCommand[nb_pipe]->sortie = fp[1];
-        // tabCommand[nb_pipe]->entree = -1;
         tabCommand[nb_pipe++]->args[i - debut] = NULL;
         debut = i + 1;
       }
@@ -183,8 +176,6 @@ int main(int argc, char **argv, char **envp)
     tabCommand[nb_pipe] = (pcommand)malloc(sizeof(command));
     tabCommand[nb_pipe]->args = &words[debut];
     tabCommand[nb_pipe]->args[i - debut] = NULL;
-    // tabCommand[nb_pipe]->entree = fp[0];
-    // tabCommand[nb_pipe]->sortie = -1;
 
     int fps[nb_pipe * 2];
 
@@ -200,10 +191,10 @@ int main(int argc, char **argv, char **envp)
     int status;
     int tab_pid[nb_pipe];
 
-    for (int cmd_indice = 0; tabCommand[cmd_indice] != NULL; cmd_indice++)
+    for (int cmd_indice = 0; cmd_indice <= nb_pipe; cmd_indice++)
     {
       /* Déterminer si l'entrée correspond à une commande interne */
-      if (exec_intern_cmd(tabCommand[cmd_indice]->args, envp) == -1) /* Utilisation des fonctions externes */
+      if (tabCommand[cmd_indice] != NULL && (exec_intern_cmd(tabCommand[cmd_indice]->args, envp) == -1)) /* Utilisation des fonctions externes */
       {
 
         int pid = fork();
@@ -214,15 +205,7 @@ int main(int argc, char **argv, char **envp)
           perror("FORK : NO_CHILD_CREATED");
           exit(-1);
         case 0:
-        { /* child code */
-
-          /* fils : close tout les descripteurs qui ne lui appartiennent pas */
-          /* pere : attendre que tout tes fils ont fini (gerer pid dans command) */
-          /* pere : fermer tous descripteurs */
-
-          /* PREMIERE COMMANDE TOUJOURS PIPER MAIS SI 2E EST INTERNE ON S'EN FOUT */
-
-          /* si pas premier pipe */
+        {
 
           if (cmd_indice != 0)
           {
@@ -232,27 +215,23 @@ int main(int argc, char **argv, char **envp)
               perror("dup2");
               exit(1);
             }
-            printf("Pas debut \n ");
           }
 
-          /* si pas le dernier */
           if (tabCommand[cmd_indice + 1] != NULL)
           {
-            printf("\nhere\n");
             if (dup2(fps[(cmd_indice)*2 + 1], STDOUT_FILENO) == -1)
             {
               printf("Pas BON du tout\n ");
               perror("dup2");
               exit(1);
             }
-            printf("Pas fin \n ");
           }
 
-          for (int k = 0; k < nb_pipe * 2; k++)
+          if (nb_pipe >= 1)
           {
-            if (fps[k] != STDOUT_FILENO && fps[k] != STDIN_FILENO)
+            for (int k = 0; k < nb_pipe * 2; k++)
             {
-              if (close(fps[k] == -1))
+              if (close(fps[k]) == -1)
               {
 
                 printf("k:%d, fps[k]:%d\n", k, fps[k]);
@@ -266,40 +245,21 @@ int main(int argc, char **argv, char **envp)
 
           break;
         }
-        default: /* parent code */
-
+        default:
           tab_pid[cmd_indice] = pid;
-          // if (cmd_indice == nb_pipe)
-          // {
-          //   for (int m = 0; m < nb_pipe; m++)
-          //   {
-          //     close(fps[m * 2]);
-          //     close(fps[m * 2 + 1]);
-          //   }
-
-          //   // if (-1 == waitpid(-1, &status, WNOHANG))
-          //   //   perror("waitpid: ");
-          //   for (int stop = 0; stop < nb_pipe + 1; stop++)
-          //     wait(&status);
-          // }
           break;
         }
       }
     }
-    for (int i = 0; i < nb_pipe;i++)
+    
+    for (int i = 0; i < nb_pipe; i++)
     {
       close(fps[i * 2]);
       close(fps[i * 2 + 1]);
     }
-    for (i = 0; i < nb_pipe; i++)
+    for (i = 0; i <= nb_pipe; i++)
     {
       waitpid(tab_pid[i], &status, 0);
-
-      if (WIFEXITED(status))
-      {
-        printf("[%d] TERMINATED (Status: %d)\n",
-               tab_pid[i], WEXITSTATUS(status));
-      }
     }
 
     free(words);

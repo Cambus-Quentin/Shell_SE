@@ -189,21 +189,26 @@ int cd(char **envp, char **args, int indice_pwd, int indice_home)
 
 int exec_intern_cmd(char **cmd_name, char **envp)
 {
-  if (strcmp(cmd_name[0], "pwd") == 0)
+  if (cmd_name[0] != NULL)
   {
-    pwd(envp, cmd_name);
+    if (strcmp(cmd_name[0], "pwd") == 0)
+    {
+      pwd(envp, cmd_name);
+    }
+    else if (strcmp(cmd_name[0], "cd") == 0)
+    {
+      cd(envp, cmd_name, find_env(envp, "PWD="), find_env(envp, "HOME="));
+    }
+    /* ici exit */
+    else if (strcmp(cmd_name[0], "exit") == 0)
+    {
+      exit(0);
+    }
+    else
+    {
+      return -1;
+    }
+    return 0;
   }
-  else if (strcmp(cmd_name[0], "cd") == 0)
-  {
-    cd(envp, cmd_name, find_env(envp, "PWD="), find_env(envp, "HOME="));
-  }
-  /* ici exit */
-  else if (strcmp(cmd_name[0], "exit") == 0)
-  {
-    exit(0);
-  }
-  else{
-    return -1;
-  }
-  return 0;
+  return -1;
 }
