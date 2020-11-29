@@ -142,6 +142,9 @@ char **split_in_words(char *line)
   return tmp;
 }
 
+/* TODO : Nous voulons recouper le programme suivant en plusieurs sous fonctions mais le temps ne nous l'as pas permis */
+/* TODO : Pour les redirections, rien de plus compliqué mais demande de parser une nouvelle fois ou différemment et rediriger les entrées sorties 
+notamment avec freopen  */
 int main(int argc, char **argv, char **envp)
 {
   /* récupération des indices necessaire dans le shell */
