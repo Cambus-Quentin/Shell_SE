@@ -8,7 +8,7 @@
             "name": "gcc-9 - Générer et déboguer le fichier actif",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "program": "/home/cambusq/Documents/Polytech/S7/PC/TP/Shell_SE/shell",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

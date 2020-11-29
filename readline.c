@@ -197,6 +197,9 @@ int main(int argc, char **argv, char **envp)
       }
     }
 
+    int status;
+    int tab_pid[nb_pipe];
+
     for (int cmd_indice = 0; tabCommand[cmd_indice] != NULL; cmd_indice++)
     {
       /* Déterminer si l'entrée correspond à une commande interne */
@@ -220,11 +223,12 @@ int main(int argc, char **argv, char **envp)
           /* PREMIERE COMMANDE TOUJOURS PIPER MAIS SI 2E EST INTERNE ON S'EN FOUT */
 
           /* si pas premier pipe */
+
           if (cmd_indice != 0)
           {
-            if (dup2(fps[0], STDIN_FILENO) == -1)
+            if (dup2(fps[(cmd_indice - 1) * 2], STDIN_FILENO) == -1)
             {
-              printf("Error 2nd termes dup2\n");
+              printf("Error 2nd termes ou + dup2\n");
               perror("dup2");
               exit(1);
             }
@@ -234,7 +238,8 @@ int main(int argc, char **argv, char **envp)
           /* si pas le dernier */
           if (tabCommand[cmd_indice + 1] != NULL)
           {
-            if (dup2(fps[cmd_indice*2 + 1], STDOUT_FILENO) == -1)
+            printf("\nhere\n");
+            if (dup2(fps[(cmd_indice)*2 + 1], STDOUT_FILENO) == -1)
             {
               printf("Pas BON du tout\n ");
               perror("dup2");
@@ -245,27 +250,58 @@ int main(int argc, char **argv, char **envp)
 
           for (int k = 0; k < nb_pipe * 2; k++)
           {
-            if (close(fps[k*2] == -1))
-            perror("close");
+            if (fps[k] != STDOUT_FILENO && fps[k] != STDIN_FILENO)
+            {
+              if (close(fps[k] == -1))
+              {
+
+                printf("k:%d, fps[k]:%d\n", k, fps[k]);
+                perror("close");
+                exit(1);
+              }
+            }
           }
 
-          exec_extern_cmd(tabCommand[cmd_indice]->args, envp, path_loc); 
+          exec_extern_cmd(tabCommand[cmd_indice]->args, envp, path_loc);
+
+          break;
         }
         default: /* parent code */
-          for (int m = 0; m < nb_pipe; m++)
-          {
-            close(fps[m * 2]);
-            close(fps[m * 2 + 1]);
-          }
 
-          if (-1 == waitpid(-1, &status, WNOHANG))
-            perror("waitpid: ");
-          // for (int stop = 0; stop < nb_pipe + 1; stop++)
-          //   wait(&status);
+          tab_pid[cmd_indice] = pid;
+          // if (cmd_indice == nb_pipe)
+          // {
+          //   for (int m = 0; m < nb_pipe; m++)
+          //   {
+          //     close(fps[m * 2]);
+          //     close(fps[m * 2 + 1]);
+          //   }
+
+          //   // if (-1 == waitpid(-1, &status, WNOHANG))
+          //   //   perror("waitpid: ");
+          //   for (int stop = 0; stop < nb_pipe + 1; stop++)
+          //     wait(&status);
+          // }
           break;
         }
       }
     }
+    for (int i = 0; i < nb_pipe;i++)
+    {
+      close(fps[i * 2]);
+      close(fps[i * 2 + 1]);
+    }
+    for (i = 0; i < nb_pipe; i++)
+    {
+      waitpid(tab_pid[i], &status, 0);
+
+      if (WIFEXITED(status))
+      {
+        printf("[%d] TERMINATED (Status: %d)\n",
+               tab_pid[i], WEXITSTATUS(status));
+      }
+    }
+
     free(words);
     free(line);
   }
